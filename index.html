@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Device Information Collector</title>
+  <script src="https://cdn.jsdelivr.net/npm/ua-parser-js/dist/ua-parser.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+<pre id="output">Collecting…</pre>
+
+<script>
+"use strict";
+
+function testStorage(type) {
+  try {
+    const storage = window[type];
+    if (!storage) return false;
+    const testKey = "__test_storage__";
+    storage.setItem(testKey, "1");
+    storage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkWebGL() {
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+    if (!gl) return false;
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkIndexedDB() {
+  try {
+    return !!window.indexedDB;
+  } catch {
+    return false;
+  }
+}
+
+function collectDeviceInfo() {
+  const nav = window.navigator || {};
+  const scr = window.screen || {};
+
+  // Parse userAgent using ua-parser-js if available
+  const parsedUA = typeof UAParser === "function" ? new UAParser(nav.userAgent).getResult() : null;
+
+  // Timezone and locale
+  const locale = Intl.DateTimeFormat?.().resolvedOptions() || {};
+
+  // Screen and viewport information
+  const screenInfo = {
+    width: scr.width ?? null,
+    height: scr.height ?? null,
+    availWidth: scr.availWidth ?? null,
+    availHeight: scr.availHeight ?? null,
+    colorDepth: scr.colorDepth ?? null,
+    pixelDepth: scr.pixelDepth ?? null,
+    pixelRatio: window.devicePixelRatio || 1,
+    viewportWidth: window.innerWidth || null,
+    viewportHeight: window.innerHeight || null,
+    orientation: scr.orientation?.type || null
+  };
+
+  // Browser metadata
+  const browser = {
+    userAgent: nav.userAgent || "",
+    language: nav.language || "",
+    languages: Array.isArray(nav.languages) ? [...nav.languages] : [],
+    cookieEnabled: Boolean(nav.cookieEnabled),
+    timezone: locale.timeZone || null,
+    timezoneOffset: new Date().getTimezoneOffset(),
+    locale: locale.locale || null,
+    calendar: locale.calendar || null,
+    numberingSystem: locale.numberingSystem || null
+  };
+
+  // Browser capabilities
+  const capabilities = {
+    localStorage: testStorage("localStorage"),
+    sessionStorage: testStorage("sessionStorage"),
+    indexedDB: checkIndexedDB(),
+    serviceWorker: "serviceWorker" in nav,
+    webAssembly: typeof WebAssembly !== "undefined",
+    webGL: checkWebGL(),
+    webGPU: Boolean(nav.gpu),
+    webAuthn: Boolean(window.PublicKeyCredential && nav.credentials?.create),
+    webRTC: typeof window.RTCPeerConnection !== "undefined",
+    pdfViewer: nav.pdfViewerEnabled ?? null
+  };
+
+  return {
+    collectedAt: new Date().toISOString(),
+    ...(parsedUA || {}),
+    browser: {
+      ...(parsedUA?.browser || {}),
+      ...browser
+    },
+    screen: screenInfo,
+    capabilities
+  };
+}
+
+function renderDeviceInfo() {
+  const output = document.getElementById("output");
+  try {
+    const result = collectDeviceInfo();
+    output.textContent = JSON.stringify(result, null, 2);
+  } catch (error) {
+    output.textContent = JSON.stringify({
+      error: error?.message || String(error)
+    }, null, 2);
+  }
+}
+
+renderDeviceInfo();
+</script>
+</body>
+</html>
